@@ -1,70 +1,71 @@
-import React, { Component } from 'react';
+import { useEffect, useState } from 'react';
 import Button from '../button';
 import ImageGallery from '../image-gallery';
 import Loader from '../loader';
 import SearchBar from '../search-bar';
 import { getImages } from '../../util/api-client';
 
-const INITIAL_STATE = {
-  page: 1,
-  totalHits: 0,
-  query: '',
-  images: [],
-  error: '',
-  isLoading: false,
-};
+const App = () => {
+  const [page, setPage] = useState(1);
+  const [totalHits, setTotalHits] = useState(0);
+  const [query, setQuery] = useState('');
+  const [images, setImages] = useState([]);
 
-class App extends Component {
-  state = {
-    ...INITIAL_STATE,
+  const [isLoading, setIsLoading] = useState(false);
+
+  const setInitialState = () => {
+    setPage(1);
+    setTotalHits(0);
+    setQuery('');
+    setImages([]);
+    setIsLoading(false);
   };
 
-  handleSearchFormSubmit = async query => {
-    if (this.state.query === query) return;
+  const fetchImages = async (page, query) => {
+    if (!query) return;
 
-    const firstPage = 1;
-
-    if (!query) {
-      this.setState({ ...INITIAL_STATE });
-      return;
+    setIsLoading(true);
+    try {
+      const { hits, totalHits } = await getImages(page, query);
+      setImages(prevImages => prevImages.concat(hits));
+      setTotalHits(totalHits);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading(false);
     }
-
-    this.setState({ isLoading: true });
-    const { hits, totalHits } = await getImages(firstPage, query);
-    this.setState({ ...INITIAL_STATE, query, totalHits, images: [...hits] });
   };
 
-  handleLoadMoreButtonClick = async () => {
-    if (this.state.isLoading) return;
-    const { page, query } = this.state;
-    const nextPage = page + 1;
-
-    this.setState({ isLoading: true });
-
-    const { hits, totalHits } = await getImages(nextPage, query);
-
-    this.setState(prevState => {
-      return {
-        isLoading: false,
-        totalHits,
-        page: nextPage,
-        images: prevState.images.concat(hits),
-      };
+  useEffect(() => {
+    fetchImages(page, query).then(() => {
+      if (page !== 1) {
+        window.scrollTo({
+          top: document.documentElement.scrollHeight,
+          behavior: 'smooth',
+        });
+      }
     });
+  }, [query, page]);
+
+  const handleSearchFormSubmit = async newQuery => {
+    if (query === newQuery) return;
+    setInitialState();
+    setQuery(newQuery);
   };
 
-  render() {
-    const { images, totalHits, isLoading } = this.state;
-    const shouldShowLoadButton = images.length < totalHits;
-    return (
-      <div className="App">
-        <SearchBar onSubmit={this.handleSearchFormSubmit} />
-        <ImageGallery images={images} />
-        {isLoading && <Loader />}
-        {shouldShowLoadButton && <Button onClick={this.handleLoadMoreButtonClick} />}
-      </div>
-    );
-  }
-}
+  const handleLoadMoreButtonClick = () => {
+    setPage(prevPage => prevPage + 1);
+  };
+
+  const shouldShowLoadButton = images.length < totalHits;
+  return (
+    <div className="App">
+      <SearchBar onSubmit={handleSearchFormSubmit} />
+      <ImageGallery images={images} />
+      {isLoading && <Loader />}
+      {shouldShowLoadButton && <Button onClick={handleLoadMoreButtonClick} />}
+    </div>
+  );
+};
 
 export default App;
